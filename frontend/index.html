@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RaktSetu - Emergency Blood Donor System</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js for 3D background -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    
+    <!-- Leaflet for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Plotly for network graphs -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Custom glassmorphism styles */
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .glass-dark {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Animated gradient text */
+        .gradient-text {
+            background: linear-gradient(45deg, #ef4444, #f97316, #eab308);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 3s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        /* Pulsing animation */
+        .pulse-glow {
+            animation: pulseGlow 2s infinite;
+        }
+        
+        @keyframes pulseGlow {
+            0%, 100% {
+                box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+                transform: scale(1.02);
+            }
+        }
+        
+        /* Blood drop animation */
+        .blood-drop {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .blood-drop::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            width: 6px;
+            height: 6px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: bloodDrop 3s infinite;
+        }
+        
+        @keyframes bloodDrop {
+            0% { top: -10px; opacity: 0; }
+            50% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        
+        /* Floating orbs */
+        .floating-orb {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(45deg, rgba(239, 68, 68, 0.3), rgba(249, 115, 22, 0.3));
+            animation: float 6s ease-in-out infinite;
+            filter: blur(1px);
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        /* Card hover effects */
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(239, 68, 68, 0.3);
+        }
+        
+        /* Loading dots */
+        .loading-dots {
+            display: inline-block;
+        }
+        
+        .loading-dots::after {
+            content: '';
+            animation: loadingDots 1.5s steps(4, end) infinite;
+        }
+        
+        @keyframes loadingDots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+        
+        /* Slide in animation */
+        .slide-in {
+            transform: translateX(-100px);
+            opacity: 0;
+            transition: all 0.5s ease;
+        }
+        
+        .slide-in.active {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        
+        /* Counter animation */
+        .counter {
+            font-variant-numeric: tabular-nums;
+        }
+        
+        /* Map and graph containers */
+        .map-container, .graph-container {
+            height: 400px;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        /* Chat messages */
+        .chat-message {
+            animation: slideInChat 0.3s ease;
+        }
+        
+        @keyframes slideInChat {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(45deg, #ef4444, #f97316);
+            border-radius: 4px;
+        }
+        
+        /* Background container */
+        #bg-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white overflow-x-hidden">
+    <!-- 3D Background Container -->
+    <div id="bg-container"></div>
+    
+    <!-- Floating Orbs -->
+    <div class="floating-orb w-20 h-20 top-10 left-10" style="animation-delay: 0s;"></div>
+    <div class="floating-orb w-16 h-16 top-1/3 right-20" style="animation-delay: 2s;"></div>
+    <div class="floating-orb w-12 h-12 bottom-20 left-1/3" style="animation-delay: 4s;"></div>
+    <div class="floating-orb w-24 h-24 bottom-10 right-10" style="animation-delay: 1s;"></div>
+    
+    <!-- Header -->
+    <header class="relative z-10 p-6">
+        <nav class="glass rounded-2xl p-4 mx-auto max-w-7xl">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center blood-drop">
+                        <i class="fas fa-heart text-white text-xl"></i>
+                    </div>
+                    <h1 class="text-3xl font-bold gradient-text">RaktSetu</h1>
+                </div>
+                <div class="hidden md:flex items-center space-x-6 text-sm">
+                    <span class="flex items-center space-x-2">
+                        <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                        <span>AI System Active</span>
+                    </span>
+                    <span class="text-gray-300">Emergency Protocol Enabled</span>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="relative z-10">
+        <!-- Hero Section -->
+        <section class="text-center py-16 px-6">
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-5xl md:text-7xl font-bold mb-6 gradient-text">
+                    Save Lives with AI
+                </h2>
+                <p class="text-xl md:text-2xl text-gray-300 mb-8">
+                    Emergency Blood Donor Network powered by Advanced AI Matching
+                </p>
+                <div class="flex flex-wrap justify-center gap-4 text-lg">
+                    <span class="glass px-6 py-3 rounded-full">🩸 Rare Blood Types</span>
+                    <span class="glass px-6 py-3 rounded-full">⚡ Real-time Matching</span>
+                    <span class="glass px-6 py-3 rounded-full">🤖 AI Powered</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Statistics Cards -->
+        <section class="px-6 mb-16">
+            <div class="max-w-7xl mx-auto">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="glass-dark rounded-2xl p-6 card-hover">
+                        <div class="text-3xl mb-2">💉</div>
+                        <div class="text-2xl font-bold counter" data-target="1247">0</div>
+                        <div class="text-gray-400">Lives Saved</div>
+                    </div>
+                    <div class="glass-dark rounded-2xl p-6 card-hover">
+                        <div class="text-3xl mb-2">🏥</div>
+                        <div class="text-2xl font-bold counter" data-target="156">0</div>
+                        <div class="text-gray-400">Partner Hospitals</div>
+                    </div>
+                    <div class="glass-dark rounded-2xl p-6 card-hover">
+                        <div class="text-3xl mb-2">👥</div>
+                        <div class="text-2xl font-bold counter" data-target="5847">0</div>
+                        <div class="text-gray-400">Active Donors</div>
+                    </div>
+                    <div class="glass-dark rounded-2xl p-6 card-hover">
+                        <div class="text-3xl mb-2">⚡</div>
+                        <div class="text-2xl font-bold"><span class="counter" data-target="92">0</span>%</div>
+                        <div class="text-gray-400">AI Accuracy</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Patient Selection -->
+        <section class="px-6 mb-16">
+            <div class="max-w-4xl mx-auto">
+                <div class="glass-dark rounded-2xl p-8">
+                    <h3 class="text-2xl font-bold mb-6 flex items-center">
+                        <i class="fas fa-user-injured text-red-500 mr-3"></i>
+                        Emergency Patient Selection
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Patient</label>
+                            <select id="patientSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-red-500 transition-colors">
+                                <option value="">Loading patients...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Blood Type</label>
+                            <input type="text" id="bloodType" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-red-500" readonly>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Urgency Level</label>
+                            <input type="text" id="urgencyLevel" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-red-500" readonly>
+                        </div>
+                    </div>
+                    <button id="findDonorsBtn" class="mt-6 bg-gradient-to-r from-red-500 to-orange-500 text-white px-8 py-4 rounded-lg font-semibold text-lg pulse-glow transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-search mr-2"></i>
+                        <span id="btnText">Find Compatible Donors</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Dashboard Grid -->
+        <section class="px-6 mb-16">
+            <div class="max-w-7xl mx-auto">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Interactive Map -->
+                    <div class="glass-dark rounded-2xl p-6 card-hover">
+                        <h4 class="text-xl font-semibold mb-4 flex items-center">
+                            <i class="fas fa-map-marker-alt text-green-500 mr-2"></i>
+                            Donor Locations
+                        </h4>
+                        <div id="map" class="map-container bg-gray-800 rounded-lg"></div>
+                    </div>
+
+                    <!-- Network Graph -->
+                    <div class="glass-dark rounded-2xl p-6 card-hover">
+                        <h4 class="text-xl font-semibold mb-4 flex items-center">
+                            <i class="fas fa-project-diagram text-blue-500 mr-2"></i>
+                            AI Matching Network
+                        </h4>
+                        <div id="networkGraph" class="graph-container bg-gray-800 rounded-lg"></div>
+                    </div>
+
+                    <!-- Search Results -->
+                    <div class="glass-dark rounded-2xl p-6 card-hover">
+                        <h4 class="text-xl font-semibold mb-4 flex items-center">
+                            <i class="fas fa-list-ul text-purple-500 mr-2"></i>
+                            Matching Results
+                        </h4>
+                        <div id="searchResults" class="space-y-4 max-h-80 overflow-y-auto">
+                            <div class="text-gray-400 text-center py-8">
+                                <i class="fas fa-search text-4xl mb-4 opacity-50"></i>
+                                <p>Select a patient and click "Find Donors" to see results</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chatbot -->
+                    <div class="glass-dark rounded-2xl p-6 card-hover">
+                        <h4 class="text-xl font-semibold mb-4 flex items-center">
+                            <i class="fas fa-comments text-yellow-500 mr-2"></i>
+                            Donor Communication
+                        </h4>
+                        <div id="chatMessages" class="bg-gray-800 rounded-lg p-4 h-64 overflow-y-auto mb-4 space-y-3">
+                            <div class="text-gray-400 text-center py-8">
+                                <i class="fas fa-robot text-4xl mb-4 opacity-50"></i>
+                                <p>Contact a donor to start conversation</p>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <input type="text" id="chatInput" placeholder="Type your message..." class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-yellow-500" disabled>
+                            <button id="sendChatBtn" class="bg-yellow-500 text-gray-900 px-4 py-2 rounded-lg hover:bg-yellow-400 transition-colors disabled:opacity-50" disabled>
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Success Modal -->
+        <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="glass rounded-2xl p-8 max-w-md mx-4 text-center">
+                <div class="text-6xl mb-4">🎉</div>
+                <h3 class="text-2xl font-bold mb-4 gradient-text">Life Saved!</h3>
+                <p class="text-gray-300 mb-6">Donor successfully contacted and blood match confirmed. Emergency response activated.</p>
+                <button id="closeModal" class="bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-400 transition-colors">
+                    Celebrate Success
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="relative z-10 py-12 px-6 border-t border-gray-800">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center">
+                <div class="flex justify-center space-x-8 mb-6">
+                    <!--<div class="glass px-4 py-2 rounded-lg">
+                        <i class="fab fa-js-square text-yellow-500 mr-2"></i>
+                        JavaScript
+                    </div>
+                    <div class="glass px-4 py-2 rounded-lg">
+                        <i class="fas fa-map text-green-500 mr-2"></i>
+                        Leaflet.js
+                    </div>
+                    <div class="glass px-4 py-2 rounded-lg">
+                        <i class="fas fa-chart-network text-blue-500 mr-2"></i>
+                        Plotly.js
+                    </div>
+                    <div class="glass px-4 py-2 rounded-lg">
+                        <i class="fas fa-cube text-purple-500 mr-2"></i>
+                        Three.js
+                    </div>-->
+    <!-- Footer -->
+<footer>
+  <div class="footer-content">
+    <div class="social-icons">
+      <a href="#"><i class="fab fa-facebook"></i></a>
+      <a href="#"><i class="fab fa-instagram"></i></a>
+      <a href="#"><i class="fab fa-twitter"></i></a>
+      <a href="#"><i class="fab fa-github"></i></a>
+      <a href="#"><i class="fab fa-youtube"></i></a>
+    </div>
+
+    <div class="links">
+      <a href="#">Home</a>
+      <a href="#">News</a>
+      <a href="#">About</a>
+      <a href="#">Contact Us</a>
+      <a href="#">Our Team</a>
+    </div>
+
+    <div class="credits">
+      <p>© 2025 <b>RaktSetu</b> - Powered by AI for Humanity</p>
+      <p>Project Page • Source Code • Made by Team [ByteMeRed]</p>
+    </div>
+  </div>
+</footer>
+
+<!-- Footer Styles -->
+<style>
+  footer {
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    background: rgba(20, 20, 30, 0.8); /* Transparent effect like header */
+    backdrop-filter: blur(8px);
+    padding: 15px 0;
+    color: #fff;
+    z-index: 1000;
+  }
+
+  .footer-content {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-wrap: wrap;
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .footer-content div {
+    margin: 5px 10px;
+  }
+
+  .social-icons a {
+    color: #ddd;
+    margin: 0 8px;
+    font-size: 20px;
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  .social-icons a:hover {
+    color: #fff;
+  }
+
+  .links a {
+    color: #ddd;
+    margin: 0 10px;
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  .links a:hover {
+    color: #fff;
+  }
+
+  .credits p {
+    margin: 3px 0;
+    font-size: 14px;
+    color: #aaa;
+  }
+
+  /* Responsive (Mobile) */
+  @media (max-width: 768px) {
+    .footer-content {
+      flex-direction: column;
+    }
+    .links, .social-icons, .credits {
+      margin: 10px 0;
+    }
+  }
+</style>
+
+<!-- Font Awesome for Icons -->
+<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+
+    <script src="script.js"></script>
+</body>
+</html>
