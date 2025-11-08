@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RaktSetu - Emergency Blood Donor System</title>
+    <!-- Optional: Configure backend API base URL for static hosting (e.g., Vercel) -->
+    <!-- Set content to your live backend URL, e.g., https://your-backend.onrender.com -->
+    <meta name="api-base-url" content="https://rs-yq1h.onrender.com">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -503,6 +506,10 @@
 <!-- Font Awesome for Icons -->
 <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
 
+    <!-- Explicit runtime override for API base URL (helps static hosts like Vercel) -->
+    <script>
+      window.__API_BASE_URL__ = 'https://rs-yq1h.onrender.com';
+    </script>
     <script src="script.js"></script>
 </body>
 </html>

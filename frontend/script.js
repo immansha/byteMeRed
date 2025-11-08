@@ -1,6 +1,33 @@
 // API Configuration - Easy to change for deployment
+// Auto-detect API base URL with optional overrides for static hosting (e.g., Vercel)
+// Priority:
+// 1) window.__API_BASE_URL__ (set via inline script or env-injected)
+// 2) <meta name="api-base-url" content="https://your-backend"> in index.html
+// 3) localhost:8000 when developing locally
+// 4) same-origin (useful when reverse-proxied)
+let detectedBaseURL = '';
+try {
+    const meta = typeof document !== 'undefined' ? document.querySelector('meta[name="api-base-url"]') : null;
+    const metaContent = meta && meta.getAttribute('content') ? meta.getAttribute('content').trim() : '';
+    if (typeof window !== 'undefined' && window.__API_BASE_URL__) {
+        detectedBaseURL = String(window.__API_BASE_URL__).trim();
+    } else if (metaContent) {
+        detectedBaseURL = metaContent;
+    } else if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        detectedBaseURL = 'http://localhost:8000';
+    } else if (typeof window !== 'undefined') {
+        detectedBaseURL = window.location.origin;
+    }
+} catch (e) {
+    // Fallback to localhost in case of any error
+    detectedBaseURL = 'http://localhost:8000';
+}
+if (typeof console !== 'undefined') {
+    try { console.log('Using API base URL:', detectedBaseURL); } catch (_) {}
+}
+
 const API_CONFIG = {
-    baseURL: 'http://localhost:8000',  // Backend API URL for local non-Docker setup
+    baseURL: detectedBaseURL,
     endpoints: {
         patients: '/patients',
         patient: (id) => `/patients/${id}`,
