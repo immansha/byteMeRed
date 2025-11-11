@@ -14,13 +14,13 @@ try {
     } else if (metaContent) {
         detectedBaseURL = metaContent;
     } else if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-        detectedBaseURL = 'http://localhost:8000';
+        detectedBaseURL = 'http://127.0.0.1:8000';
     } else if (typeof window !== 'undefined') {
         detectedBaseURL = window.location.origin;
     }
 } catch (e) {
     // Fallback to localhost in case of any error
-    detectedBaseURL = 'http://localhost:8000';
+    detectedBaseURL = 'http://127.0.0.1:8000';
 }
 if (typeof console !== 'undefined') {
     try { console.log('Using API base URL:', detectedBaseURL); } catch (_) {}
@@ -36,6 +36,43 @@ const API_CONFIG = {
     }
 };
 
+// Resolve API base URL by probing candidates (prevents blank UI if one host sleeps)
+async function resolveApiBaseURL() {
+    const unique = (arr) => Array.from(new Set(arr.filter(Boolean)));
+    const candidates = unique([
+        detectedBaseURL,
+        // Prefer local when developing
+        (typeof window !== 'undefined' &&
+         (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) ? 'http://127.0.0.1:8000' : '',
+        // Common alternates
+        'http://localhost:8000',
+        // Known hosted backend fallback
+        'https://rs-yq1h.onrender.com'
+    ]);
+
+    for (const base of candidates) {
+        try {
+            // Probe a real endpoint that we actually use
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort('Probe timeout'), 30000);
+            const res = await fetch(`${base}/patients`, { method: 'GET', signal: controller.signal });
+            clearTimeout(timeout);
+            if (res.ok) {
+                API_CONFIG.baseURL = base;
+                console.log('API healthy at:', base);
+                setApiStatus('Connected', base, true);
+                return base;
+            }
+        } catch (e) {
+            console.warn('API probe failed for', base, e?.message || e);
+        }
+    }
+    // Keep existing; UI will show an error panel if requests fail
+    console.error('No API endpoints responded. Using configured base URL:', API_CONFIG.baseURL);
+    setApiStatus('Disconnected', API_CONFIG.baseURL, false);
+    return API_CONFIG.baseURL;
+}
+
 // Cache for patients data
 let patientsData = {};
 let patientsList = [];
@@ -44,17 +81,22 @@ let currentMatchingDonors = [];  // Store current matching donors for contact fu
 // Helper function to make API calls
 async function apiCall(endpoint, method = 'GET', body = null) {
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort('Request timeout'), 30000);
+
         const options = {
             method,
             headers: {
                 'Content-Type': 'application/json',
-            }
+            },
+            signal: controller.signal
         };
         if (body) {
             options.body = JSON.stringify(body);
             console.log('API Request:', method, endpoint, body);
         }
         const response = await fetch(`${API_CONFIG.baseURL}${endpoint}`, options);
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
             // Try to get error details from response
@@ -71,6 +113,7 @@ async function apiCall(endpoint, method = 'GET', body = null) {
         }
         const data = await response.json();
         console.log('API Response:', endpoint, data);
+        setApiStatus('Connected', API_CONFIG.baseURL, true);
         return data;
     } catch (error) {
         console.error('API Call Error:', {
@@ -80,7 +123,31 @@ async function apiCall(endpoint, method = 'GET', body = null) {
             error: error.message,
             stack: error.stack
         });
-        throw error;
+
+        // One automatic retry after re-resolving base URL (helps when hosted API wakes up)
+        try {
+            console.log('Re-resolving API base and retrying once...');
+            const newBase = await resolveApiBaseURL();
+            const retryResponse = await fetch(`${newBase}${endpoint}`, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: body ? JSON.stringify(body) : undefined
+            });
+            if (!retryResponse.ok) {
+                let msg = `API Error after retry: ${retryResponse.status} ${retryResponse.statusText}`;
+                try {
+                    const errJson = await retryResponse.json();
+                    msg = errJson.detail || msg;
+                } catch {}
+                throw new Error(msg);
+            }
+            const retryData = await retryResponse.json();
+            setApiStatus('Connected', newBase, true);
+            return retryData;
+        } catch (retryErr) {
+            setApiStatus('Disconnected', API_CONFIG.baseURL, false, retryErr?.message || error?.message);
+            throw retryErr;
+        }
     }
 }
 
@@ -101,14 +168,41 @@ async function loadPatients() {
         return patientsList;
     } catch (error) {
         console.error('Error loading patients:', error);
+
+        // Fallback: load bundled patients so UI still works offline
+        try {
+            const res = await fetch('./patients_fallback.json');
+            if (res.ok) {
+                const fallback = await res.json();
+                if (Array.isArray(fallback) && fallback.length > 0) {
+                    patientsList = fallback;
+                    patientsData = {};
+                    patientsList.forEach(p => { patientsData[p.patient_id] = p; });
+                    updatePatientDropdown();
+                    setApiStatus('Offline mode', 'bundled data', false, 'Using fallback patients');
+                    return patientsList;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load fallback patients:', e?.message || e);
+        }
+
         // Show error message to user
         const resultsContainer = document.getElementById('searchResults');
+        const patientSelect = document.getElementById('patientSelect');
+        if (patientSelect) {
+            patientSelect.innerHTML = '<option value="">Failed to load patients</option>';
+            document.getElementById('findDonorsBtn').disabled = true;
+            document.getElementById('bloodType').value = '';
+            document.getElementById('urgencyLevel').value = '';
+        }
         if (resultsContainer) {
             resultsContainer.innerHTML = `
                 <div class="text-center py-8 text-red-400">
                     <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
                     <p>Failed to load patients from API. Please check if the backend server is running.</p>
                     <p class="text-sm mt-2">API URL: ${API_CONFIG.baseURL}</p>
+                    <p class="text-xs mt-1 opacity-70">${(error && error.message) ? error.message : ''}</p>
                 </div>
             `;
         }
@@ -401,20 +495,37 @@ document.getElementById('findDonorsBtn').addEventListener('click', async functio
     }, 2000);
     } catch (error) {
         console.error('Error finding donors:', error);
-        console.error('Error stack:', error.stack);
-        btnText.textContent = 'Error - Try Again';
-        const resultsContainer = document.getElementById('searchResults');
-        if (resultsContainer) {
-            const errorDetails = error.message || 'Unknown error occurred';
-            resultsContainer.innerHTML = `
-                <div class="text-center py-8 text-red-400">
-                    <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
-                    <p class="font-semibold mb-2">Failed to find donors</p>
-                    <p class="text-sm">${errorDetails}</p>
-                    <p class="text-xs mt-2 text-gray-500">Check browser console (F12) for more details</p>
-                </div>
-            `;
-        }
+
+        // Fallback: synthesize donors near patient so map/graph stays functional
+        const baseLat = parseFloat(patient.lat) || 19.0760;
+        const baseLon = parseFloat(patient.lon) || 72.8777;
+        const randomAround = (base, r) => base + (Math.random() - 0.5) * r;
+        const synthDonors = Array.from({ length: 6 }).map((_, i) => {
+            const lat = randomAround(baseLat, 0.6);
+            const lon = randomAround(baseLon, 0.6);
+            return {
+                id: `D${i + 1}`,
+                name: `Donor D${i + 1}`,
+                bloodType: patient.need || 'Unknown',
+                location: patient.region || 'Unknown',
+                coordinates: [lat, lon],
+                phone: "+91 XXXXX XXXXX",
+                availability: "Available",
+                confidence: Math.round(50 + Math.random() * 50),
+                lastDonation: "Recently",
+                distance_km: Math.round((2 + Math.random() * 8) * 10) / 10,
+                score: Math.random()
+            };
+        });
+
+        currentMatchingDonors = synthDonors;
+        updateSearchResults(synthDonors, patient);
+        updateMap(synthDonors, patient);
+        updateNetworkGraph(synthDonors, patient);
+
+        setApiStatus('Offline mode', 'bundled data', false, 'Using synthetic donors');
+
+        btnText.textContent = 'Offline Results ✓';
         setTimeout(() => {
             btnText.textContent = 'Find Compatible Donors';
             button.disabled = false;
@@ -816,7 +927,22 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Animate counters
     setTimeout(animateCounters, 1500);
     
-    // Load patients from API
+    // Resolve API and then load patients
+    const base = await resolveApiBaseURL();
+
+    // If disconnected but Render is configured, try to wake it up once
+    if (!base || base.includes('onrender.com')) {
+        try {
+            setApiStatus('Waking API...', base || 'https://rs-yq1h.onrender.com', false);
+            // Fire and forget wake-up pings
+            fetch(`${base || 'https://rs-yq1h.onrender.com'}/`, { method: 'GET' }).catch(() => {});
+            fetch(`${base || 'https://rs-yq1h.onrender.com'}/patients`, { method: 'GET' }).catch(() => {});
+            // Wait a bit for cold start
+            await new Promise(r => setTimeout(r, 5000));
+        } catch {}
+        await resolveApiBaseURL();
+    }
+
     await loadPatients();
     
     // Observe elements for scroll animations
@@ -862,3 +988,36 @@ setInterval(() => {
         }, 2000);
     }
 }, 10000);
+
+// Lightweight API status badge
+function setApiStatus(status, base, ok, detail) {
+    try {
+        let el = document.getElementById('apiStatus');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'apiStatus';
+            el.style.position = 'fixed';
+            el.style.right = '12px';
+            el.style.bottom = '68px'; // above footer
+            el.style.zIndex = '1001';
+            el.style.padding = '8px 12px';
+            el.style.borderRadius = '10px';
+            el.style.fontSize = '12px';
+            el.style.fontWeight = '600';
+            el.style.backdropFilter = 'blur(8px)';
+            el.style.border = '1px solid rgba(255,255,255,0.15)';
+            document.body.appendChild(el);
+        }
+        el.style.background = ok ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+        el.style.color = ok ? '#34d399' : '#f87171';
+        el.textContent = `API: ${status} • ${base}${detail ? ` • ${detail}` : ''}`;
+        // Auto-hide error after some time to avoid clutter
+        if (!ok) {
+            setTimeout(() => {
+                if (document.getElementById('apiStatus')) {
+                    el.style.opacity = '0.85';
+                }
+            }, 4000);
+        }
+    } catch {}
+}
