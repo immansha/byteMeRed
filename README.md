@@ -1,10 +1,3 @@
-Perfect — that means your frontend runs on **npm** (likely a JS-based setup such as Vite, Next, or a modern bundler) and your backend runs on **FastAPI (Uvicorn)**.
-Here’s the **updated and final README.md** — fully aligned with your working setup and hackathon submission standards.
-It’s structured, professional, and ready for GitHub or evaluation upload.
-
----
-
-```markdown
 # 🩸 RaktSetu — Bridging Donors & Lives
 
 **RaktSetu** is a full-stack blood donation web application built to connect **blood donors and recipients** effortlessly.  
@@ -192,10 +185,6 @@ pip freeze > requirements.txt
 Licensed under the **MIT License**.
 Feel free to use and modify for non-commercial and educational purposes.
 
----
 
-### 🌐 “RaktSetu — Because Every Drop Counts.”
-
-```
 
 
